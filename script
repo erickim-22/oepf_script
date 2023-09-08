@@ -1,0 +1,677 @@
+import pandas as pd
+import smtplib
+from email.message import EmailMessage
+import time
+import sys
+
+
+# reading in data from excel database (file path should be changed)
+status_info = pd.read_excel('/Users/kimster/Downloads/OEPF_database.xlsm', sheet_name=2, skiprows=10)
+member_info = pd.read_excel('/Users/kimster/Downloads/OEPF_database.xlsm', sheet_name=0, skiprows=10)
+
+status_info = status_info.iloc[:, 5:21]
+member_info = member_info.iloc[:, 5:16]
+
+# user information
+recipients = status_info['email_test'] # change to 'Email' when actually sending
+member_ID = status_info['Member_ID']
+names = status_info['First']
+full_names = status_info['First'] + ' ' + status_info['Last']
+as_status = status_info['A&S']
+vt1_status = status_info['VT1']
+vt2_status = status_info['VT2']
+vt3_status = status_info['VT3']
+overall_status = status_info['STATUS']
+
+custom_group_email_info = pd.read_excel('/Users/kimster/Downloads/OEPF_database.xlsm', sheet_name=3, skiprows=10)
+custom_group_info = custom_group_email_info.iloc[:, 1:6]
+
+
+
+
+
+
+# goodbye message
+goodbye = 'Thank you for your continued support and your dedication towards the advancement of optometry.\n\n' + 'Best Regards,' + '\nOEPF'
+
+def user_login():
+    while True:
+        try:
+            print('_______________________________')
+            password = str(input('INPUT PASSWORD: '))
+            print('\nThis may take a little, please wait...')
+            username = 'team@oepf.org'
+            smtp = smtplib.SMTP("smtp-mail.outlook.com", port=587)
+            smtp.starttls()
+            smtp.login(username, password)
+            main_menu(username, password)
+        except smtplib.SMTPAuthenticationError:
+            print('\nPASSWORD INCORRECT\n')
+
+def user_logout():
+    print('\n_______________________________')
+    print('LOGGING OUT...')
+    time.sleep(2)
+    print('\nBye Bye! :)\n')
+    print('\($_$)')
+    print('  ) )Z')
+    print('  / ' + '\\')
+    sys.exit(0)
+
+# main menu, can either send emails or search for member information
+def main_menu(username, password):
+    while True:
+        print('\n_______________________________')
+        print('MAIN MENU :)\n\nSEND EMAIL: 0\nMEMBER SEARCH: 1\nEXIT PROGRAM: X')
+        menu_selection = input('\nENTER: ')
+        print('_______________________________')
+        if menu_selection == '0':
+            print('\nLOADING EMAIL SELECTION MENU...')
+            time.sleep(2)
+            email_selection(username, password)
+        elif menu_selection == '1':
+            print('\nLOADING MEMBER SEARCH MENU...')
+            time.sleep(2)
+            find_member_status(username, password)
+        elif menu_selection == 'X':
+            user_logout()
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+
+
+
+
+## choosing between searching by name or member ID
+def find_member_status(username, password):
+    print('\n_______________________________')
+    print('MEMBER SEARCH\n')
+    print('HOW WOULD YOU LIKE TO SEARCH BY?\n\nMEMBER ID: 0\nMEMBER NAME: 1\nBACK TO MAIN MENU: b\n')
+    while True:
+        id_or_name = input('ENTER: ')
+        print('_______________________________')
+        if id_or_name == '0':
+            search_id_input(username, password)
+        elif id_or_name == '1':
+            search_name_input(username, password)
+        elif id_or_name == 'b':
+            print('\nLOADING MAIN MENU...')
+            time.sleep(1)
+            main_menu(username, password)
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+# searching by member ID
+def search_id_input(username, password):
+    while True:
+        member_id = input('ENTER MEMBER ID: ')
+        print('_______________________________')
+        print('SEARCHING BY ID...')
+        time.sleep(2)
+        if member_id not in str(member_ID.to_list()):
+            member_not_found()
+            continue
+        else:
+            member_status(member_id)
+            search_options(username, password)
+
+
+# inputting member name to search
+def search_name_input(username, password):
+    member_lname = input('ENTER LAST NAME: ')
+    member_fname = input('ENTER FIRST NAME: ')
+    print('_______________________________')
+    print('\nSEARCHING BY NAME...')
+    time.sleep(2)
+    search_by_name(member_fname, member_lname, username, password)
+
+# attempts to find names similar to what was inputted (assuming correct spelling of either first or last name)
+def potential_name_search(member_fname, member_lname, username, password):
+    print('\nSEARCHING FOR POTENTIAL MATCHES...\n')
+    time.sleep(1)
+    potential_id_search = []
+    for i in range(len(member_info)):
+        if member_info['Last'][i].lower() == member_lname.lower() or member_info['First'][i].lower() == member_fname.lower() or member_info['Last'][i].lower() == member_fname.lower() or member_info['First'][i].lower() == member_lname.lower():
+            print(str(member_info['Member_ID'][i]) + ': ' + member_info['Last'][i] + ', ' + member_info['First'][i])
+            potential_id_search.append(member_info['Member_ID'][i])
+        else:
+            continue
+
+    if len(potential_id_search) == 0:
+        print('\nMEMBER NOT FOUND. PLEASE CHECK SPELLING.')
+        find_member_status(username, password)
+    else:
+        print('\nSORRY, I COULDN\'T SEEM TO FIND THAT NAME. DID YOU MEAN ANY OF THE NAMES ABOVE?\n')
+        while True:
+            potential_choice = input('\nENTER MEMBER ID OR ENTER b TO GO BACK TO MEMBER STATUS SEARCH MENU: ')
+            print('_______________________________')
+
+            if potential_choice == 'b':
+                find_member_status(username, password)
+            elif int(potential_choice) not in potential_id_search:
+                invalid_entry_prompt()
+                continue
+            else:
+                member_id = potential_choice
+                member_status(member_id)
+                search_options(username, password)
+
+
+# searching for member id associated with name
+def search_by_name(member_fname, member_lname, username, password):
+    member_found = False
+
+    for i in range(len(member_info)):
+        if member_info['First'][i].lower() == member_fname.lower() and member_info['Last'][i].lower() == member_lname.lower():
+            found_member_id = member_info['Member_ID'][i]
+            member_found = True
+            break
+        else:
+            continue
+
+    if member_found == True:
+        print('\nMEMBER ID FOUND!')
+        time.sleep(2)
+        member_status(found_member_id)
+        search_options(username, password)
+
+    else:
+        potential_name_search(member_fname, member_lname, username, password)
+
+
+# options after member information is searched
+def search_options(username, password):
+    time.sleep(3)
+    while True:
+        print('\n_______________________________')
+        print('SEARCH AGAIN: s\nBACK TO MAIN MENU: b\nEXIT PROGRAM: X\n')
+        choice = input('ENTER: ')
+        print('_______________________________')
+        if choice == 's':
+            print('\nLOADING...')
+            time.sleep(1)
+            find_member_status(username, password)
+        if choice == 'b':
+            print('\nLOADING MAIN MENU...')
+            time.sleep(1)
+            main_menu(username, password)
+        if choice == 'X':
+            user_logout()
+        else:
+            invalid_entry_prompt()
+            continue
+
+# if member ID isn't found
+def member_not_found():
+    print('\nMEMBER ID NOT FOUND\n')
+    time.sleep(1)
+
+
+# returns member information based on member ID
+def member_status(member_id):
+    filter = status_info['Member_ID'] == int(member_id)
+    filter_2 = member_info['Member_ID'] == int(member_id)
+
+    first_name = status_info.loc[filter, 'First'].to_list()
+    last_name = status_info.loc[filter, 'Last'].to_list()
+
+    a_s = status_info.loc[filter, 'A&S'].to_list()
+    vt1 = status_info.loc[filter, 'VT1'].to_list()
+    vt2 = status_info.loc[filter, 'VT2'].to_list()
+    vt3 = status_info.loc[filter, 'VT3'].to_list()
+    overall = status_info.loc[filter, 'STATUS'].to_list()
+
+    member_information = []
+
+    member_information.append(member_info.loc[filter_2, 'First'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Last'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Category'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Address'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'City'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'State'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Zip'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Country'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Email'].to_list()[0])
+    member_information.append(member_info.loc[filter_2, 'Phone Number'].to_list()[0])
+
+    updated_member_information = ['N/A' if pd.isna(i) else i for i in member_information]
+
+    print('_______________________________')
+    print('MEMBER INFORMATION\n')
+    print('ID: %s' % member_id)
+    print('NAME: %s, %s\n' % (updated_member_information[1], updated_member_information[0]))
+    print('CLASSIFICATION: %s\n' % updated_member_information[2])
+    print('EMAIL: %s' %updated_member_information[8])
+    print('PHONE: %s\n' %updated_member_information[9])
+    print('ADDRESS: %s' %updated_member_information[3])
+    print('CITY: %s' %updated_member_information[4])
+    print('STATE: %s' %updated_member_information[5])
+    print('ZIP: %s' %updated_member_information[6])
+    print('COUNTRY: %s\n' %updated_member_information[7])
+
+    print('A&S STATUS: %s' %a_s[0])
+    print('VT1 STATUS: %s' % vt1[0])
+    print('VT2 STATUS: %s' % vt2[0])
+    print('VT3 STATUS: %s' % vt3[0])
+    print('\nOVERALL STATUS: %s' % overall[0])
+
+
+# prompt whenever invalid entry is entered
+def invalid_entry_prompt():
+    print('\nINVALID ENTRY')
+    time.sleep(1)
+
+
+# email selection menu
+def email_selection(username, password):
+    while True:
+        print('\n_______________________________')
+        print('EMAIL SELECTION\n\nGENERAL EMAIL: 0\nCOURSE REMINDER EMAIL: 1\nSTATUS UPDATE EMAIL: 2\nCUSTOM GROUP EMAIL: 3\nBACK TO MAIN MENU: b')
+        email_type = input('\nENTER: ')
+        print('_______________________________')
+        if email_type == '0':
+            print('\nLOADING GENERAL EMAIL SETUP...')
+            time.sleep(1)
+            general_email_setup(username, password)
+        elif email_type == '1':
+            print('\nLOADING COURSE REMINDER EMAIL SETUP...')
+            time.sleep(1)
+            course_reminder_email_setup(username, password)
+        elif email_type == '2':
+            print('\nLOADING STATUS UPDATE EMAIL SETUP...')
+            status_update_email(username, password)
+            time.sleep(1)
+        elif email_type == '3':
+            print('\nLOADING CUSTOM GROUP EMAIL SETUP...')
+            time.sleep(1)
+            custom_group_email(username, password)
+        elif email_type == 'b':
+            main_menu(username, password)
+        else:
+            invalid_entry_prompt()
+            continue
+
+# function for sending emails
+def email_send(recipient, subject, message, username, password):
+    smtp = smtplib.SMTP("smtp-mail.outlook.com", port=587)
+    smtp.starttls()
+    smtp.login(username, password)
+    email = EmailMessage()
+    email["From"] = username
+    email["To"] = recipient
+    email["Subject"] = subject
+    email.set_content(message)
+    smtp.sendmail(username, recipient, email.as_string())
+    smtp.quit()
+
+# options after sending email
+def options(username, password):
+    time.sleep(2)
+    while True:
+        print('\n_______________________________')
+        print('SEND ANOTHER: s\nBACK TO EMAIL SELECTION: b\nBACK TO MAIN MENU: B\nEXIT PROGRAM: X\n')
+        user_option = input('ENTER: ')
+        print('_______________________________')
+        if user_option == 's':
+            print('\nLOADING...')
+            time.sleep(1)
+            break
+        elif user_option == 'b':
+            print('\nLOADING EMAIL SELECTION MENU...')
+            time.sleep(1)
+            email_selection(username, password)
+        elif user_option == 'B':
+            print('\nLOADING MAIN MENU...')
+            time.sleep(1)
+            main_menu(username, password)
+        elif user_option == 'X':
+            user_logout()
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+# setting up general email
+def general_email_setup(username, password):
+    while True:
+        print('\n_______________________________')
+        print('GENERAL EMAIL SETUP\n')
+
+        general_subject = input('\nENTER SUBJECT HERE:\n')
+        intro = input('ENTER INTRO HERE (OR ENTER skip TO SKIP):\n')
+        if intro == 'skip':
+            intro = ""
+        else:
+            intro = intro
+        general_body = input('ENTER BODY HERE:\n')
+        outro = input('ENTER OUTRO HERE (OR ENTER skip TO SKIP):\n')
+        if outro == 'skip':
+            outro = ""
+        else:
+            outro = outro
+        print('\n_______________________________')
+        time.sleep(1)
+        print('CONFIRM EMAIL\n')
+        print('SUBJECT: %s\n' % general_subject)
+        print('Hello ____,\n')
+        print('INTRO: \n%s\n' % intro)
+        print('BODY: \n%s\n' % general_body)
+        print('OUTRO:\n%s\n' % outro)
+        print('\n')
+        print(goodbye)
+
+        time.sleep(2)
+
+        general_email_confirm(username, password, general_body, general_subject, intro, outro)
+
+# confirming general email
+def general_email_confirm(username, password, general_body, general_subject, intro, outro):
+    while True:
+        print('\n_______________________________')
+        print('EMAIL CONFIRMATION')
+        print('\nSEND: s\nREDO: r\nEXIT TO EMAIL SELECTION: x\n')
+        gen_email_verification = input('ENTER: ')
+        print('_______________________________')
+
+        if gen_email_verification == 's':
+            send_general_email(general_body, general_subject, intro, outro, username, password)
+            options(username, password)
+            break
+        elif gen_email_verification == 'r':
+            print('CANCELLED')
+            general_email_setup(username, password)
+        elif gen_email_verification == 'x':
+             email_selection(username, password)
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+# sets variables for email setup
+def send_general_email(general_body, general_subject, intro, outro, username, password):
+    print('\n_______________________________')
+    missing_email_count = 0
+    course_incomplete_count = 0
+
+    for i in range(len(names)):
+        if pd.isna(recipients[i]):
+            print(member_ID[i], '|', full_names[i], '|', "MISSING EMAIL: NOT SENT")
+            missing_email_count += 1
+        else:
+            name = names[i]
+            recipient = recipients[i]
+            subject = general_subject
+
+            if intro == "":
+                message = 'Hi ' + name + ',' + '\n\n' + general_body + '\n\n' + outro + '\n\n' + goodbye
+            elif outro == "":
+                message = 'Hi ' + name + ',' + '\n\n' + intro + '\n\n' + general_body + '\n\n' + goodbye
+            elif intro == "" and outro == "":
+                message = 'Hi ' + name + ',' + '\n\n' + general_body + '\n\n' + goodbye
+            else:
+                message = 'Hi ' + name + ',' + '\n\n' + intro + '\n\n' + general_body + '\n\n' + outro + '\n\n' + goodbye
+
+            email_send(recipient, subject, message, username, password)
+            print(member_ID[i], '|', full_names[i], '|', 'EMAIL SENT')
+            course_incomplete_count += 1
+
+    email_sent_stats(missing_email_count, course_incomplete_count)
+
+# for sending status update emails, asks for password first before sending
+def status_update_email(username, password):
+    while True:
+        print('\n_______________________________')
+        print('STATUS UPDATE EMAIL\n')
+        stat_up_password = input('PLEASE ENTER PASSWORD TO SEND OR b TO GO BACK: ')
+        print('_______________________________')
+        time.sleep(0.5)
+        print('\nVERIFYING...')
+        time.sleep(1)
+        if stat_up_password == password:
+            send_status(username, password)
+            print('\nSENT')
+            email_selection(username, password)
+        elif stat_up_password == 'b':
+            print('\nLOADING EMAIL SELECTION MENU')
+            time.sleep(1)
+            email_selection(username, password)
+        else:
+            print('\nINCORRECT PASSWORD')
+            continue
+
+# sets up variables for status update email
+def send_status(username, password):
+    missing_email_count = 0
+    sent_count = 0
+    for i in range(len(names)):
+        if pd.isna(recipients[i]):
+            missing_email_count += 1
+        else:
+            name = names[i]
+            recipient = recipients[i]
+            a_s = as_status[i]
+            vt1 = vt1_status[i]
+            vt2 = vt2_status[i]
+            vt3 = vt3_status[i]
+            overall = overall_status[i]
+            subject = 'CURRENT COURSE STATUS'
+
+            body = f'The following are your current course completion statuses:\n\nA&S: {a_s}\nVT1: {vt1}\nVT2: {vt2}\nVT3: {vt3}\n\nOVERALL STATUS: {overall}'
+            body_2 = 'Please contact OEPF if the above information appears to be incorrect.'
+
+            message = 'Hi ' + name + ',' + '\n\n' + body + '\n\n' + body_2 + '\n\n' + goodbye
+            email_send(recipient, subject, message, username, password)
+            sent_count += 1
+
+    email_sent_stats(missing_email_count, sent_count)
+
+# code for sending course reminder emails based on course completion status
+def course_reminder_email_setup(username, password):
+    while True:
+        print('\n_______________________________')
+        print('COURSE UPDATE EMAIL SETUP\n')
+        courses = {0 : 'A&S', 1 : 'VT1', 2: 'VT2', 3 : 'VT3'}
+        print("COURSE SELECTION:\nA&S: 0\nVT1: 1\nVT2: 2\nVT3: 3\nBACK: b\n")
+        course_num = (input('ENTER: '))
+        print('_______________________________')
+        time.sleep(1)
+        if course_num == 'b':
+            email_selection(username, password)
+        else:
+            course = courses[int(course_num)]
+            course_date_col = course + '_date'
+            statuses = status_info[course]
+            course_date = status_info.loc[0, course_date_col]
+            date = course_date.strftime('%A, %B %d, %Y')
+
+            subject = f'Upcoming {course} Course Reminder'
+
+            body = f'This is a friendly reminder that your current {course} status is INCOMPLETE. The next upcoming {course} course is on {date}. Please consider registering so you ' \
+                       f'can be one step closer to reaching your certification eligibility. A link to the course registration is down below. We hope to see you there!'
+
+            course_link = status_info.loc[2, course_date_col]
+
+            print('\nMESSAGE:')
+            print('\nHi ____,\n')
+            print(body)
+            print('\n')
+            print(course_link)
+            print('\n')
+            print(goodbye)
+
+
+            send_reminder_email_decision(username, password, statuses, subject, body, course_link)
+
+
+# confirming course reminder email
+def send_reminder_email_decision(username, password, statuses, subject, body, course_link):
+    time.sleep(2)
+    while True:
+        print('\n_______________________________')
+        print('EMAIL CONFIRMATION')
+        print('\nSEND: s\nCANCEL: c\nEXIT TO EMAIL SELECTION: x\n')
+        reminder_email_verification = input('ENTER: ')
+        print('_______________________________')
+        if reminder_email_verification == 's':
+            send_course_reminder(statuses, subject, body, course_link, username, password)
+            options(username, password)
+            break
+        elif reminder_email_verification == 'c':
+            print('\nCANCELLED')
+            course_reminder_email_setup(username, password)
+        elif reminder_email_verification == 'x':
+            email_selection(username, password)
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+
+# setting up variables for course reminder email
+def send_course_reminder(statuses, subject, body, course_link, username, password):
+    print('\n_______________________________')
+    missing_email_count = 0
+    course_incomplete_count = 0
+    for i in range(len(names)):
+        if pd.isna(recipients[i]):
+            print(member_ID[i], '|', full_names[i], '|', "MISSING EMAIL: NOT SENT")
+            missing_email_count += 1
+        else:
+            if statuses[i] == 'INCOMPLETE':
+                name = names[i]
+                recipient = recipients[i]
+                subject = subject
+                message = 'Hi ' + name + ',' + '\n\n' + body + '\n\n' + course_link + '\n\n' + goodbye
+                email_send(recipient, subject, message, username, password)
+                print(member_ID[i], '|', full_names[i], '|', 'COURSE INCOMPLETE: SENT')
+                course_incomplete_count += 1
+            else:
+                print(member_ID[i], '|', full_names[i], '|', 'COURSE COMPLETED: NOT SENT')
+
+
+    email_sent_stats(missing_email_count, course_incomplete_count)
+
+
+def custom_group_email(username, password):
+    while True:
+        print('\n_______________________________')
+        print('CUSTOM GROUP EMAIL\n')
+        print(custom_group_info.iloc[:, 0:3])
+        link = custom_group_info.loc[0, 'Link']
+        if pd.isna(link):
+            link = ""
+        else:
+            link = link
+        print('\nLINK: %s' %link)
+        print('\nIS THIS INFORMATION CORRECT?\nYES: y\nNO: n\n')
+        custom_group_verification = input('ENTER: ')
+        if custom_group_verification == 'y':
+            subject = input('\nENTER SUBJECT HERE:\n')
+            intro = input('ENTER INTRO HERE (OR ENTER skip TO SKIP):\n')
+            if intro == 'skip':
+                intro = ""
+            else:
+                intro = intro
+            body = input('ENTER BODY HERE:\n')
+            outro = input('ENTER OUTRO HERE (OR ENTER skip TO SKIP):\n')
+            if outro == 'skip':
+                outro = ""
+            else:
+                outro = outro
+            print('\n_______________________________')
+            time.sleep(1)
+            print('CONFIRM EMAIL\n')
+            print('SUBJECT: %s\n' %subject)
+            print('Hello ____,\n')
+            print('INTRO: \n%s\n' %intro)
+            print('BODY: \n%s\n' %body)
+            print('LINK: \n%s\n' %link)
+            print('OUTRO:\n%s\n' %outro)
+            print('\n')
+            print('Best Regards,\nOEPF')
+            print('\nSEND EMAIL?\nYES: y\nCANCEL: c\n')
+            while True:
+                final_cg_verification = input('ENTER: ')
+
+                if final_cg_verification == 'y':
+                    print('\nSENT')
+                    time.sleep(1)
+                    send_custom(body, intro, outro, subject, link, username, password)
+                    options(username, password)
+                    break
+                elif final_cg_verification == 'c':
+                    print('\nCANCELLED')
+                    print('\nRETURNING TO EMAIL SELECTION...')
+                    time.sleep(2)
+                    email_selection(username, password)
+                else:
+                    invalid_entry_prompt()
+                    continue
+
+        elif custom_group_verification == 'n':
+            print('\nPLEASE DOUBLE CHECK THE INFORMATION ON THE EXCEL SPREADSHEET.\n')
+            print('RETURNING TO EMAIL SELECTION...')
+            time.sleep(2)
+            email_selection(username, password)
+        else:
+            invalid_entry_prompt()
+            continue
+
+
+
+def send_custom(body, intro, outro, subject, link, username, password):
+    missing_count = 0
+    sent_count = 0
+    names = custom_group_info['First Name']
+    emails = custom_group_info['Email']
+
+    if link == "":
+        body = body
+    else:
+        body = body + '\n\n' + link
+
+
+    for i in range(len(names)):
+        if pd.isna(emails[i]):
+            missing_count += 1
+        else:
+            if pd.isna(names[i]):
+                hello = 'Hello,'
+            else:
+                name = names[i]
+                hello = 'Hello ' + name + ', '
+            recipient = emails[i]
+            subject = subject
+
+            if intro == "":
+                message = hello + '\n\n' + body + '\n\n' + outro + '\n\n' + 'Best Regards,\nOEPF'
+            elif outro == "":
+                message = hello + '\n\n' + intro + '\n\n' + body + '\n\n' + 'Best Regards,\nOEPF'
+            elif intro == "" and outro == "":
+                message = hello + '\n\n' + body + '\n\n' + 'Best Regards,\nOEPF'
+            else:
+                message = hello + '\n\n' + intro +'\n\n' + body + '\n\n' + outro + '\n\n' + 'Best Regards,\nOEPF'
+
+            email_send(recipient, subject, message, username, password)
+            sent_count += 1
+
+    email_sent_stats(missing_count, sent_count)
+
+
+# statistics for emails send and not sent
+def email_sent_stats(email_missing, incomplete):
+    print('\n_______________________________')
+    print('EMAIL STATISTICS\n')
+    print('EMAILS SENT: %d' %incomplete)
+    print('EMAILS MISSING: %d' %email_missing)
+
+
+
+if __name__ == '__main__':
+    user_login()
+
+
